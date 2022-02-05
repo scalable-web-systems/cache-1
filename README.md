@@ -13,7 +13,7 @@ This tutorial is the first tutorial in the **caching** series. We'll be learning
 5. The reader should clone this repository to their local machine before moving on to the next section.
 
 ## Why Caching?
-Making round trips to the database is expensive. And doing it for a system that has a considerable amount of read requests, communicating with the database every time someone wants to retrieve some information can cause some serious performance issues. Caching is defined as the process of storing data in a temporary storage for faster lookups. Introducing cache as an additional storage layer that sits in front of the database layer abridges the gap between the API and the database layer and the lookup trips consequently can be completed with lesser fuel. In the [first]() tutorial of the **docker-compose** series, we store the posts in an array variable called **posts** i.e in the local memory of our NodeJS server. That array acts as **cache**. Lookup is significantly faster compared to reading from a database. However, the storage is temporary and we lose our data the moment the server is shut down.
+Making round trips to the database is expensive. And doing it for a system that has a considerable amount of read requests, communicating with the database every time someone wants to retrieve some information can cause some serious performance issues. Caching is defined as the process of storing data in a temporary storage for faster lookups. Introducing cache as an additional storage layer that sits in front of the database layer abridges the gap between the API and the database layer and the lookup trips consequently can be completed with lesser fuel. In the [first](https://github.com/scalable-web-systems/docker-compose-node) tutorial of the **docker-compose** series, we store the posts in an array variable called **posts** i.e in the local memory of our NodeJS server. That array acts as **cache**. Lookup is significantly faster compared to reading from a database. However, the storage is temporary and we lose our data the moment the server is shut down.
 
 ### Cache Writing Policies
 There are at least 3 different ways of writing information to a cache, each having its pros and cons, and different use cases.
@@ -174,12 +174,111 @@ Here, we accept 2 parameters - key and value. We first check whether a node with
 ```
 
 
+> src/posts/index.js, lines **13-14, **lines **77 - 88**, lines **104-108**
+
+```
+const cacheCapacity = parseInt(process.env.CACHECAPACITY) ?? 10
+const cache = new LruCache(cacheCapacity)
+```
+
+```
+                let post = cache.get(_id)
+                if (!post) { // cache miss
+                    const collection = connection.collection(postsCollection)
+                    post = await collection
+                        .findOne({_id: oid})
+                    console.log(`Cache miss for post with ID #${post._id}. Inserting it into cache.`)
+                    cache.put(post._id.toHexString(), post)
+                    console.log(`Cache insertion successful, ${cache.capacity - cache.map.size} slots remaining`)
+                }
+                else {
+                    console.log(`Returning post with ID #${post._id} from cache`)
+                }
+                return res.status(post ? 200 : 404).json(post)
+```
+
+```
+                console.log(`Writing post with title '${title}' to database`)
+                const collection = connection.collection(postsCollection)
+                const post = await collection
+                    .insertOne(payload)
+                console.log(`Database insertion successful.`)
+```
+
+We define the cache as a global variable with the capacity passed in as an evironment variable or a default value of 10. Here we adopt the **write around** cache write policy. Let's look at the second code snippet. This is part of the post route definition. We write the post straight to the database. Now let's look at the first snippet, which is part of the GET /:id route definition. We attempt to get the post from the cache. If it doesn't exist in the cache, then we get it from the database and add it to the cache. Otherwise we simply return the post. Note the console logs interspersed between the code. They will help us analyze the behavior of the system later.
+
+We don't use cache while reading all posts because it's not feasible to store every post on the cache and hence it doesn't make sense to retrieve some of them from cache and the rest from the database.
+
+> src/comments/index.js lines **62 - 73**, **88 - 96**
+
+```
+                console.log(`Writing comment with postID #${comment.insertedId} to cache.`)
+                let cachedComments = cache.get(postId)
+                if (cachedComments == null) {
+                    console.log('Cache miss.')
+                    cachedComments = []    
+                }
+                cachedComments.push({
+                    ...payload,
+                    _id: comment.insertedId
+                })
+                cache.put(postId, cachedComments)
+                console.log(`Cache insertion successful, ${cache.capacity - cache.map.size} slots remaining`)
+```
+
+```
+                let comments = cache.get(postId)
+                if (comments == null) {
+                    console.log(`Cache miss for comments with post ID #${postId}. Inserting them into cache.`)
+                    const collection = connection.collection(commentsCollectionName)
+                    comments = await collection.find({postId: postId}).toArray()
+                    cache.put(postId, comments)
+                    console.log(`Cache insertion successful, ${cache.capacity - cache.map.size} slots remaining`)
+                }
+                return res.status(200).json(comments)
+```
+
+In the comments service, we follow the **write through** policy. We cache the comments based off of their post id. So if we don't write to the cache when there is a new comment, our cache won't update comments for the post in the cache if it exists there. First code snippet is from the POST request definition. When writing to the cache, we first check if the comments for that post already exist in the cache. If they do, then we push the new comment to that array of comments and update the cache. Otherwise we create a new array, add the comment to that array, and add the <postId, \[comment]> mapping to the cache. And then, just like with the **posts** service, if there is a miss, we update the cache after pulling the comments from the database.
+
+
 
 ## Steps
 
 **IMPORTANT:** Create a new folder called **data** in the root directory of the cloned repository before performing the steps.
 
 Perform the steps outlined in [Tutorial 2](https://github.com/scalable-web-systems/docker-compose-gateway) of **Docker Compose** series. We'll be inspecting logs to understand how the reads and writes are being peformed. 
+
+1. Add a new post with the following payload:
+```
+{
+    "title": "Post 1",
+    "description": "Caching is fun"
+}
+```
+
+2. Add a few more - with titles **Post 2**, **Post 3** etc.
+3. Hit the GET / endpoint of **posts** service to grab information of all the posts.
+4. Right now, our cache is empty. Let's add a comment for the first post. This will trigger the sanity check to ensure that the post exists and the **comments** service will internally communicate with the GET /:id endpoint of the **posts** service. This will cause the **posts** service to check the cache for the post and since our posts cache is empty, it will grab the post from the database and put it on the cache. Once we add the comment for our first post, our **posts** cache layer would look like: 
+> **Post 1**
+
+5. Let's look at the **posts** service logs. Do `docker-compose logs posts`. You should receive a similar output:
+![image](https://user-images.githubusercontent.com/7733516/152659244-c054e936-0d91-4f41-8f64-bfef7a59521d.png)
+Our docker-compose script configures the cache to have only 2 slots. Now let's look at the logs of **comments** service. Do `docker-compose logs comments`. You're gonna see some pretty verbose output. When we hit the **posts** service GET / endpoint, we sent a lot of requests to the GET /:postId endpoint of the **comments** service to grab the comments for each post. The logs should make sense and are fairly intuitive.
+![image](https://user-images.githubusercontent.com/7733516/152659455-7a15dfbf-4a8e-4783-b754-9e9dff7e0cca.png)
+
+
+6. Now if we add another comment for the same post, the sanity check /:id **posts** GET request would simply grab the post from the cache. Let's test it out. Add a new comment for the same post and check the logs. Your last 2 lines of the output should be something like:
+![image](https://user-images.githubusercontent.com/7733516/152659300-69dad9b1-12cc-4445-a908-fb058d7b714c.png)
+7. Now let's add a comment for post #2 and post #3. Grab their ids by hitting the GET / endpoint of the **posts** service and copying their ids. After adding the comment for post #2, the cache layer would like: 
+> **Post 2** - **Post 1**
+
+After the insertion of the 3rd post's comment, the layer would look like:
+> **Post 3** - **Post 2**
+
+As we can see, the 1st post is now no longer on the cache since our cache's capacity was only 2 and the first post was the least recently used post. Let's confirm this by adding another comment for the first post. On inspecting the logs of **posts** service, we should see something like:
+![image](https://user-images.githubusercontent.com/7733516/152659552-e90a0ade-e604-4771-b057-34f5d755979e.png)
+ As evident, there's a cache miss for the first post since it was no longer on the cache.
+
 
 ## Conclusion
 After doing this tutorial, one should have a firm grasp on caching fundamentals. Additionally, one should be able to create their own LRU cache.
