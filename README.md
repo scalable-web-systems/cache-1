@@ -23,7 +23,147 @@ There are at least 3 different ways of writing information to a cache, each havi
 
 ### Cache Eviction Policies
 Cache is never meant to be a substitute for permanent storage. There is only finite amount of information (significantly lesser than the size of database) that can and should be stored on the cache layer. With that being said, the system can't throw in the towel when the cache gets full. Hence, we have cache eviction policies in place that help us determine which object to discard every time there is an overflow. There are 6 main cache eviction policies - FIFO (**F**irst **I**n **F**irst **O**ut), LIFO (**L**ast **I**n **F**irst **O**ut), LRU (**L**east **R**ecently **U**sed), LFU (**L**east **F**requently **U**sed), MRU (**M**ost **R**ecently **U**sed), Random Eviction. All these policies should be self explanatory. In this tutorial, we'll work on using maps and linked lists to design our own implementation of the **Least Recently Used** cache.
+
 ## Let's Look at the Code
+> src/lrucache/cache.js
+```
+class CacheNode {
+    constructor(key, value) {
+        this.key = key;
+        this.value = value;
+    }
+}
+class LruCache {
+    constructor(capacity) {
+        this.capacity = capacity;
+        this.head = new CacheNode();
+        this.tail = new CacheNode();
+        this.head.next = this.tail;
+        this.tail.previous = this.head;
+        this.map = new Map();
+    }
+
+    removeNode = (node) => {
+        node.previous.next = node.next;
+        node.next.previous = node.previous;
+    };
+
+    addNode = (node) => {
+        this.head.next.previous = node;
+        node.next = this.head.next;
+        this.head.next = node;
+        node.previous = this.head;
+    };
+    
+    get = (key) => {
+        const result = this.map.get(key);
+        if (result != null) {
+            this.removeNode(result);
+            this.addNode(result);
+            return result.value;
+        }
+        return undefined;
+    };
+    
+    put = (key, value) => {
+        const node = this.map.get(key);
+        if (node != null) {
+            console.log(`Object with key ${key} already in the cache!`)
+            this.removeNode(node);
+            node.value = value;
+            this.map.set(key, node);
+            this.addNode(node);
+            return;
+        }
+        if (this.capacity === this.map.size) {
+            console.log('cache overflow!')
+            this.map.delete(this.tail.previous.key);
+            this.removeNode(this.tail.previous);
+        }
+        const newNode = new CacheNode(key, value);
+        this.addNode(newNode);
+        this.map.set(key, newNode);
+    };
+}
+
+module.exports = { LruCache }
+```
+
+Woah!! That's a LOT of code. Let's break it down into the 2 classes that's composed of - **CacheNode** and **LruCache**. **LruCache** will serve as our main cache class and will be responsible for storing data while **CacheNode** is the standard Linked List Node class with a next and a tail pointer as well as to members to store key and value properties of the incoming object. **CacheNode** class is fairly small and intuitive. Let's take a deep dive into the **LruCache** class. Let's look at the constructor:
+
+```
+    constructor(capacity) {
+        this.capacity = capacity;
+        this.head = new CacheNode();
+        this.tail = new CacheNode();
+        this.head.next = this.tail;
+        this.tail.previous = this.head;
+        this.map = new Map();
+    }
+```
+
+The constructor accepts an integer defining the capacity of the cache as the only argument. We define quite a few data members here - capacity of the cache, 2 dummy linked list nodes (head and tail) and a map to store our data. We connect the head and tail pointers to each other. Head's next node is tail and tail's previous node is head.
+
+Next, let's inspect the two helper methods - **addNode** and **removeNode**:
+
+```
+    removeNode = (node) => {
+        node.previous.next = node.next;
+        node.next.previous = node.previous;
+    };
+
+    addNode = (node) => {
+        this.head.next.previous = node;
+        node.next = this.head.next;
+        this.head.next = node;
+        node.previous = this.head;
+    };
+```
+
+**removeNode** accept a node adjusts the pointers of its neighboring nodes to remove it from the list. **addNode** accepts a node and appends it to the front of the list, right next to the dummy head node.
+
+Next, let's look at the method **get** that is used to retrieve information from the cache:
+
+```
+    get = (key) => {
+        const result = this.map.get(key);
+        if (result != null) {
+            this.removeNode(result);
+            this.addNode(result);
+            return result.value;
+        }
+        return undefined;
+    };
+```
+
+Very simple. It accepts a key as the argument and tries to fetch the correspoinding node from the map. If the node exists in the cache, then we remove the node from the list and add it to the front of the list. This way, the most recently used node is placed in front of the list while the least recently used node is towards the back of the list. We then return the node's value i.e the requested information. If the node doesn't exist in the cache, we return undefined.
+
+Now, let's look at the method **put** that is used to write data to the cache.
+
+```
+    put = (key, value) => {
+        const node = this.map.get(key);
+        if (node != null) {
+            console.log(`Object with key ${key} already in the cache!`)
+            this.removeNode(node);
+            node.value = value;
+            this.map.set(key, node);
+            this.addNode(node);
+            return;
+        }
+        if (this.capacity === this.map.size) {
+            console.log('cache overflow!')
+            this.map.delete(this.tail.previous.key);
+            this.removeNode(this.tail.previous);
+        }
+        const newNode = new CacheNode(key, value);
+        this.addNode(newNode);
+        this.map.set(key, newNode);
+    };
+}
+```
+
+Here, we accept 2 parameters - key and value. We first check whether a node with the given key already exists in the map. If it does, then we log that, remove the node from the list, update its value, update it in the map, add it to the front of the list and return. Otherwise, we do a sanity check to ensure that we have reached the cache's capacity. If we do fill out our cache, we log that and remove the last node (right before the dummy tail node) from the map by accessing its key and remove it from the list as well. Finally, we create a new node object and propagate down to it the given key and value. We add this new node to the front of the list and set it in the map. Interesting huh? Just the way our social systems work. _Stay popular enough to remain alive or face being edged out._
 
 
 
