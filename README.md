@@ -89,7 +89,7 @@ class LruCache {
 module.exports = { LruCache }
 ```
 
-Woah!! That's a LOT of code. Let's break it down into the 2 classes that's composed of - **CacheNode** and **LruCache**. **LruCache** will serve as our main cache class and will be responsible for storing data while **CacheNode** is the standard Linked List Node class with a next and a tail pointer as well as to members to store key and value properties of the incoming object. **CacheNode** class is fairly small and intuitive. Let's take a deep dive into the **LruCache** class. Let's look at the constructor:
+Woah!! That's a LOT of code. Let's break it down into the 2 classes that it's composed of - **CacheNode** and **LruCache**. **LruCache** will serve as our main cache class and will be responsible for storing data while **CacheNode** is the standard Linked List Node class with a next and a tail pointer as well as two members to store key and value properties of the incoming object. **CacheNode** class is fairly small and intuitive. Let's take a deep dive into the **LruCache** class. Let's look at the constructor:
 
 ```
     constructor(capacity) {
@@ -164,6 +164,14 @@ Now, let's look at the method **put** that is used to write data to the cache.
 ```
 
 Here, we accept 2 parameters - key and value. We first check whether a node with the given key already exists in the map. If it does, then we log that, remove the node from the list, update its value, update it in the map, add it to the front of the list and return. Otherwise, we do a sanity check to ensure that we have reached the cache's capacity. If we do fill out our cache, we log that and remove the last node (right before the dummy tail node) from the map by accessing its key and remove it from the list as well. Finally, we create a new node object and propagate down to it the given key and value. We add this new node to the front of the list and set it in the map. Interesting huh? Just the way our social systems work. _Stay popular enough to remain alive or face being edged out._
+
+**Note:** This file `cache.js` is defined in its own indepedent directory **lrucache** and is **NOT** a part of the **posts** or the **comments** service. The driving force behind this reorganization was DRY - Don't Repeat Yoursef. This has been done in an effort to avoid duplicating the code in both services. As a result, the two **Dockerfiles** have been slightly tweaked to work with this new organization and have been moved out of their project's subdirectories. They now reside in the **src** folder and are called `Dockerfile.posts` and `Dockerfile.comments` respectively. The `docker-compose.yml` file has also been adjusted to reflect these changes. The **context** attributes under **posts** and **comments** service sections have been changed and we have introduced a new attribute **dockerfile** right below the **context** attribute to define the names of our Dockerfiles since they are no longer called just **Dockerfile**. For example,
+
+```
+    build:
+      context: ./src
+      dockerfile: Dockerfile.posts
+```
 
 
 
