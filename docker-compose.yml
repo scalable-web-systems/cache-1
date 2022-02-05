@@ -2,13 +2,15 @@ version: '3.3'
 services:
   posts:
     build:
-      context: ./src/posts
+      context: ./src
+      dockerfile: Dockerfile.posts
     expose:
       - 5000
     environment:
       - COMMENTS=comments
       - DBCONNECTIONSTRING=mongo
       - DBNAME=db
+      - CACHECAPACITY=2
     depends_on:
       - mongo
     networks:
@@ -16,13 +18,15 @@ services:
   
   comments:
     build:
-      context: ./src/comments
+      context: ./src
+      dockerfile: Dockerfile.comments
     expose:
       - 5000
     environment:
       - POSTS=posts
       - DBCONNECTIONSTRING=mongo
       - DBNAME=db
+      - CACHECAPACITY=2
     depends_on:
       - mongo
     networks:

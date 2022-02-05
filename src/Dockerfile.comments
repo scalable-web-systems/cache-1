@@ -1,0 +1,16 @@
+FROM node:slim
+
+WORKDIR /lrucache
+COPY ./lrucache ./
+
+WORKDIR ../app
+
+COPY ./comments/package*.json ./
+
+RUN npm install
+
+COPY ./comments .
+
+ENTRYPOINT [ "node", "index.js" ]
+
+EXPOSE 5000

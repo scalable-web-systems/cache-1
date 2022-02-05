@@ -2,6 +2,7 @@ const cors = require('cors')
 const express = require("express")
 const { MongoClient, ObjectId } = require('mongodb')
 const axios = require('axios').default
+const { LruCache } = require('../lrucache/cache')
 
 
 const app = express()
@@ -9,6 +10,8 @@ app.use(cors())
 app.use(express.json())
 const port = process.env.port || 5000
 const postsCollection = `posts`
+const cacheCapacity = parseInt(process.env.CACHECAPACITY) ?? 10
+const cache = new LruCache(cacheCapacity)
 
 const connectToDatabase = async () => {
     try {
@@ -16,7 +19,6 @@ const connectToDatabase = async () => {
         const dbName = process.env.DBNAME
         if (!dbConnectionString || !dbName)
             throw new Error("Environment variable for db connection string or db name not defined.")
-        
         const url = `mongodb://${dbConnectionString}/${dbName}`
         const client = new MongoClient(url)
         await client.connect()
@@ -72,11 +74,18 @@ const runServer = async () => {
                 const oid = new ObjectId(_id)
                 console.log(`Incoming request to find post with ID #${_id}`)
 
-                const collection = connection.collection(postsCollection)
-                let post = await collection
-                    .findOne({_id: oid})
-                
-                console.log(post)
+                let post = cache.get(_id)
+                if (!post) { // cache miss
+                    const collection = connection.collection(postsCollection)
+                    post = await collection
+                        .findOne({_id: oid})
+                    console.log(`Cache miss for post with ID #${post._id}. Inserting it into cache.`)
+                    cache.put(post._id.toHexString(), post)
+                    console.log(`Cache insertion successful, ${cache.capacity - cache.map.size} slots remaining`)
+                }
+                else {
+                    console.log(`Returning post with ID #${post._id} from cache`)
+                }
                 return res.status(post ? 200 : 404).json(post)
             }
             catch (error) {
@@ -92,10 +101,11 @@ const runServer = async () => {
                     throw new Error("Incorrect payload")
                 }
         
+                console.log(`Writing post with title '${title}' to database`)
                 const collection = connection.collection(postsCollection)
                 const post = await collection
                     .insertOne(payload)
-        
+                console.log(`Database insertion successful.`)
                 return res.status(201).json(post)
             }
             catch (error) {
