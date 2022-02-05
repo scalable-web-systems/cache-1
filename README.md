@@ -1,4 +1,5 @@
 # Tutorial on Caching
+> **Author -** Ishaan Khurana, [LinkedIn](https://www.linkedin.com/in/ishaan-khurana-46968679/)
 
 ## Objective
 This tutorial is the first tutorial in the **caching** series. We'll be learning about caching and its importance, different cache eviction and write policies, various tradeoffs to keep in mind when applying these write policies. Finally, we'll be inspecting the source code and going over the implementation of a Linked List based LRU cache.
