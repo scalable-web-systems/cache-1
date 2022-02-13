@@ -7,7 +7,7 @@ const { LruCache } = require('../lrucache/cache')
 const app = express()
 app.use(cors())
 app.use(express.json())
-const port = process.env.port || 5000
+const port = process.env.port || 27017
 const commentsCollectionName = `comments`
 const cacheCapacity = parseInt(process.env.CACHECAPACITY) ?? 10
 const cache = new LruCache(cacheCapacity)
