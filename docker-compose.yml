@@ -53,7 +53,7 @@ services:
     volumes:
       - ./data:/data/db
     expose:
-      - 5000
+      - 27017
     networks:
       - network
 
