@@ -14,19 +14,22 @@ class LruCache {
         this.map = new Map();
     }
 
-    removeNode = (node) => {
+
+    removeNode = function (node) {
         node.previous.next = node.next;
         node.next.previous = node.previous;
-    };
+    }.bind(this);
 
-    addNode = (node) => {
+    
+
+    addNode = function (node) {
         this.head.next.previous = node;
         node.next = this.head.next;
         this.head.next = node;
         node.previous = this.head;
-    };
+    }.bind(this);
     
-    get = (key) => {
+    get = function (key) {
         const result = this.map.get(key);
         if (result != null) {
             this.removeNode(result);
@@ -34,9 +37,9 @@ class LruCache {
             return result.value;
         }
         return undefined;
-    };
+    }.bind(this);
     
-    put = (key, value) => {
+    put = function (key, value) {
         const node = this.map.get(key);
         if (node != null) {
             console.log(`Object with key ${key} already in the cache!`)
@@ -54,7 +57,7 @@ class LruCache {
         const newNode = new CacheNode(key, value);
         this.addNode(newNode);
         this.map.set(key, newNode);
-    };
+    }.bind(this);
 }
 
 module.exports = { LruCache }
